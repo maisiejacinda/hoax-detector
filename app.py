@@ -9,9 +9,9 @@ import gdown
 # === Fungsi Download Model dari Google Drive ===
 def download_model_from_drive(file_id, destination):
     if os.path.exists(destination):
-        return
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, destination, quiet=False)
+        return  # ⬅️ PENTING! Biar gak download terus
+    gdown.download(f"https://drive.google.com/uc?id={file_id}", destination, quiet=False)
+
 
 # === Fungsi Pembersih Teks ===
 def clean_text(text):
