@@ -95,7 +95,7 @@ if st.button("🔍 Deteksi"):
                 pred = torch.argmax(probs, dim=1).item()
                 confidence = probs[0][pred].item()
 
-                # FIX: override jika confidence rendah
+                # Override jika confidence rendah
                 if confidence < 0.6:
                     label = "✅ Berita Valid (Confidence rendah)"
                     st.warning(f"{label} – Confidence: {confidence:.2f}")
@@ -103,7 +103,7 @@ if st.button("🔍 Deteksi"):
                     label = "✅ Berita Valid" if pred == 0 else "❌ Berita Hoax"
                     st.success(f"{label} – Confidence: {confidence:.2f}")
 
-  except Exception as e:
-    import traceback
-    st.error("❌ Terjadi error saat mendeteksi.")
-    st.code(traceback.format_exc())  # 🔍 Tampilkan log lengkap!
+        except Exception as e:
+            import traceback
+            st.error("❌ Terjadi error saat mendeteksi.")
+            st.code(traceback.format_exc())
