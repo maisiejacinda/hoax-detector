@@ -61,7 +61,7 @@ st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 
 st.markdown("""
 Masukkan teks berita di bawah ini untuk mendeteksi apakah termasuk hoax atau valid.  
-Sistem akan menampilkan hasil deteksi **beserta tingkat keyakinan (confidence)**.
+Sistem akan menampilkan hasil deteksi **beserta tingkat keyakinan (confidence)**.  
 Jika model kurang yakin, hasil default akan dianggap valid sebagai tindakan keamanan.
 """)
 
@@ -95,7 +95,7 @@ if st.button("🔍 Deteksi"):
                 pred = torch.argmax(probs, dim=1).item()
                 confidence = probs[0][pred].item()
 
-                # LOGIKA FIX UAS
+                # FIX: override jika confidence rendah
                 if confidence < 0.6:
                     label = "✅ Berita Valid (Confidence rendah)"
                     st.warning(f"{label} – Confidence: {confidence:.2f}")
