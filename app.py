@@ -9,9 +9,8 @@ import gdown
 # === Fungsi Download Model dari Google Drive ===
 def download_model_from_drive(file_id, destination):
     if os.path.exists(destination):
-        return  # ⬅️ PENTING! Biar gak download terus
+        return  # Hindari download ulang
     gdown.download(f"https://drive.google.com/uc?id={file_id}", destination, quiet=False)
-
 
 # === Fungsi Pembersih Teks ===
 def clean_text(text):
@@ -22,7 +21,7 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Definisi Arsitektur Model (bert dikirim dari luar) ===
+# === Definisi Arsitektur Model ===
 class IndoBERT_CNN_LSTM(nn.Module):
     def __init__(self, bert_model):
         super().__init__()
@@ -42,24 +41,27 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === Load Model dan Tokenizer ===
+# === Setup Device ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Download model jika belum ada
+# === Download model hanya sekali ===
 download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
 
-# Load pretrained IndoBERT dulu
-bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
-bert_model = bert_model.to(device)
+# === Load model & tokenizer hanya sekali ===
+@st.cache_resource
+def load_model():
+    bert = BertModel.from_pretrained('indobenchmark/indobert-base-p1').to(device)
+    model = IndoBERT_CNN_LSTM(bert).to(device)
+    model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
+    model.eval()
+    return model
 
-# Kirim ke arsitektur custom
-model = IndoBERT_CNN_LSTM(bert_model)
-model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
-model = model.to(device)
-model.eval()
+@st.cache_resource
+def load_tokenizer():
+    return BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
-# Tokenizer
-tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+model = load_model()
+tokenizer = load_tokenizer()
 
 # === Tampilan Streamlit ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
