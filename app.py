@@ -71,14 +71,31 @@ input_text = st.text_area("📋 Teks Berita")
 if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
         st.warning("Teks tidak boleh kosong!")
+    elif "http" in input_text:
+        st.warning("Masukkan isi teks berita, bukan URL/link.")
     else:
-        cleaned = clean_text(input_text)
-        tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
-        input_ids = tokens['input_ids'].to(device)
-        attention_mask = tokens['attention_mask'].to(device)
+        try:
+            cleaned = clean_text(input_text)
+            st.write("🧽 Teks setelah dibersihkan:", cleaned)
 
-        with torch.no_grad():
-            output = model(input_ids, attention_mask)
-            pred = torch.argmax(output, dim=1).item()
+            tokens = tokenizer(
+                cleaned,
+                return_tensors='pt',
+                truncation=True,
+                padding='max_length',
+                max_length=512
+            )
 
-        st.success("✅ Berita Valid" if pred == 0 else "❌ Berita Hoax")
+            input_ids = tokens['input_ids'].to(device)
+            attention_mask = tokens['attention_mask'].to(device)
+
+            st.write("📏 Jumlah token:", input_ids.shape[1])
+
+            with torch.no_grad():
+                output = model(input_ids, attention_mask)
+                pred = torch.argmax(output, dim=1).item()
+
+            st.success("✅ Berita Valid" if pred == 0 else "❌ Berita Hoax")
+
+        except Exception as e:
+            st.error(f"❌ Terjadi error:\n`{str(e)}`")
