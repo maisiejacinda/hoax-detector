@@ -12,11 +12,6 @@ import gdown
 def download_model_from_drive(file_id, destination):
     if os.path.exists(destination):
         return
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, destination, quiet=False)
-def download_model_from_drive(file_id, destination):
-    if os.path.exists(destination):
-        return
     URL = "https://drive.google.com/uc?export=download"
     session = requests.Session()
     response = session.get(URL, params={"id": file_id}, stream=True)
@@ -36,6 +31,7 @@ def download_model_from_drive(file_id, destination):
         for chunk in response.iter_content(CHUNK_SIZE):
             if chunk:
                 f.write(chunk)
+
 
 # === Fungsi Pembersih Teks ===
 def clean_text(text):
