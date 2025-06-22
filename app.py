@@ -3,6 +3,32 @@ import torch
 from transformers import BertTokenizer, BertModel
 import torch.nn as nn
 import re
+import os
+import requests
+
+# === Fungsi Download Model dari Google Drive ===
+def download_model_from_drive(file_id, destination):
+    if os.path.exists(destination):
+        return
+    URL = "https://drive.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params={"id": file_id}, stream=True)
+
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith("download_warning"):
+                return value
+        return None
+
+    token = get_confirm_token(response)
+    if token:
+        response = session.get(URL, params={"id": file_id, "confirm": token}, stream=True)
+
+    CHUNK_SIZE = 32768
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk:
+                f.write(chunk)
 
 # === Fungsi Pembersih Teks ===
 def clean_text(text):
@@ -33,15 +59,19 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === Load Model & Tokenizer ===
+# === Load Model dan Tokenizer ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Download model dari Google Drive jika belum ada
+download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
+
 model = IndoBERT_CNN_LSTM().to(device)
 model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
 model.eval()
 
 tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
-# === Tampilan Streamlit ===
+# === Tampilan Aplikasi Streamlit ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 st.markdown("Masukkan teks berita di bawah ini:")
