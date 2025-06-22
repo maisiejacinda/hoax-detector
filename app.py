@@ -22,11 +22,11 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Definisi Arsitektur Model ===
+# === Definisi Arsitektur Model (bert dikirim dari luar) ===
 class IndoBERT_CNN_LSTM(nn.Module):
-    def __init__(self):
+    def __init__(self, bert_model):
         super().__init__()
-        self.bert = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
+        self.bert = bert_model
         self.conv1 = nn.Conv1d(768, 128, kernel_size=3, padding=1)
         self.lstm = nn.LSTM(128, 64, batch_first=True)
         self.fc = nn.Linear(64, 2)
@@ -45,19 +45,23 @@ class IndoBERT_CNN_LSTM(nn.Module):
 # === Load Model dan Tokenizer ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Unduh model dari Google Drive
+# Download model jika belum ada
 download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
 
-# Load model dan pindahkan ke device
-model = IndoBERT_CNN_LSTM()
+# Load pretrained IndoBERT dulu
+bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
+bert_model = bert_model.to(device)
+
+# Kirim ke arsitektur custom
+model = IndoBERT_CNN_LSTM(bert_model)
 model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
 model = model.to(device)
 model.eval()
 
-# Load tokenizer
+# Tokenizer
 tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
-# === Tampilan Aplikasi Streamlit ===
+# === Tampilan Streamlit ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 st.markdown("Masukkan teks berita di bawah ini:")
