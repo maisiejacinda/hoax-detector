@@ -45,13 +45,16 @@ class IndoBERT_CNN_LSTM(nn.Module):
 # === Load Model dan Tokenizer ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Download model dari Google Drive jika belum ada
+# Unduh model dari Google Drive
 download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
 
-model = IndoBERT_CNN_LSTM().to(device)
+# Load model dan pindahkan ke device
+model = IndoBERT_CNN_LSTM()
 model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
+model = model.to(device)
 model.eval()
 
+# Load tokenizer
 tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
 # === Tampilan Aplikasi Streamlit ===
