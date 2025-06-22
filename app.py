@@ -22,7 +22,7 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Model Architecture ===
+# === Model Arsitektur ===
 class IndoBERT_CNN_LSTM(nn.Module):
     def __init__(self, bert_model):
         super().__init__()
@@ -42,10 +42,10 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === UI Streamlit ===
+# === Tampilan UI ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
-st.markdown("Masukkan teks berita di bawah ini:")
+st.markdown("Masukkan isi teks berita, bukan link:")
 
 input_text = st.text_area("📋 Teks Berita", height=200)
 
@@ -53,18 +53,16 @@ if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
         st.warning("Teks tidak boleh kosong!")
     elif "http" in input_text:
-        st.warning("Masukkan isi teks berita, bukan URL/link.")
+        st.warning("Masukkan isi berita, bukan URL.")
     else:
         try:
             st.info("⏳ Memuat model...")
 
-            # CPU-only untuk cloud
             device = torch.device("cpu")
 
             # Download model jika belum ada
             download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
 
-            # Load IndoBERT
             bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
             bert_model = bert_model.to(device)
 
@@ -75,36 +73,26 @@ if st.button("🔍 Deteksi"):
 
             tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
-            # Bersihkan teks dan tokenisasi
             cleaned = clean_text(input_text)
             st.write("🧽 Teks setelah dibersihkan:", cleaned)
 
-            tokens = tokenizer(
-                cleaned,
-                return_tensors='pt',
-                truncation=True,
-                padding='max_length',
-                max_length=512
-            )
-
+            tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
             input_ids = tokens['input_ids'].to(device)
             attention_mask = tokens['attention_mask'].to(device)
+
             st.write("📏 Jumlah token:", input_ids.shape[1])
 
-            # Prediksi
             with torch.no_grad():
                 output = model(input_ids, attention_mask)
                 probs = torch.softmax(output, dim=1)
                 pred = torch.argmax(probs, dim=1).item()
                 confidence = probs[0][pred].item()
 
-                if confidence < 0.6:
-                    st.warning(f"✅ Berita Valid (Confidence rendah – {confidence:.2f})")
+                # Logika deteksi aman:
+                if pred == 1 and confidence >= 0.60:
+                    st.error(f"❌ Berita Hoax – Confidence: {confidence:.2f}")
                 else:
-                    if pred == 0:
-                        st.success(f"✅ Berita Valid – Confidence: {confidence:.2f}")
-                    else:
-                        st.error(f"❌ Berita Hoax – Confidence: {confidence:.2f}")
+                    st.success(f"✅ Berita Valid – Confidence: {confidence:.2f}")
 
         except Exception as e:
             st.error("❌ Terjadi error saat mendeteksi.")
