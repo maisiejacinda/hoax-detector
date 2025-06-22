@@ -103,5 +103,7 @@ if st.button("🔍 Deteksi"):
                     label = "✅ Berita Valid" if pred == 0 else "❌ Berita Hoax"
                     st.success(f"{label} – Confidence: {confidence:.2f}")
 
-        except Exception as e:
-            st.error(f"❌ Terjadi error:\n`{str(e)}`")
+  except Exception as e:
+    import traceback
+    st.error("❌ Terjadi error saat mendeteksi.")
+    st.code(traceback.format_exc())  # 🔍 Tampilkan log lengkap!
