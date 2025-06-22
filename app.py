@@ -9,7 +9,7 @@ import gdown
 # === Fungsi Download Model dari Google Drive ===
 def download_model_from_drive(file_id, destination):
     if os.path.exists(destination):
-        return  # Hindari download ulang
+        return
     gdown.download(f"https://drive.google.com/uc?id={file_id}", destination, quiet=False)
 
 # === Fungsi Pembersih Teks ===
@@ -21,7 +21,7 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Definisi Arsitektur Model ===
+# === Arsitektur Model Custom ===
 class IndoBERT_CNN_LSTM(nn.Module):
     def __init__(self, bert_model):
         super().__init__()
@@ -41,34 +41,31 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === Setup Device ===
+# === Inisialisasi Model dan Tokenizer ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# === Download model hanya sekali ===
 download_model_from_drive("1z_dUz9Dcw4oR2LA7n9Lh55eTucMemNya", "model_hoax.pt")
 
-# === Load model & tokenizer hanya sekali ===
-@st.cache_resource
-def load_model():
-    bert = BertModel.from_pretrained('indobenchmark/indobert-base-p1').to(device)
-    model = IndoBERT_CNN_LSTM(bert).to(device)
-    model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
-    model.eval()
-    return model
+bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
+bert_model = bert_model.to(device)
 
-@st.cache_resource
-def load_tokenizer():
-    return BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+model = IndoBERT_CNN_LSTM(bert_model)
+model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
+model = model.to(device)
+model.eval()
 
-model = load_model()
-tokenizer = load_tokenizer()
+tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
 # === Tampilan Streamlit ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
-st.markdown("Masukkan teks berita di bawah ini:")
 
-input_text = st.text_area("📋 Teks Berita")
+st.markdown("""
+Masukkan teks berita di bawah ini untuk mendeteksi apakah termasuk hoax atau valid.  
+Sistem akan menampilkan hasil deteksi **beserta tingkat keyakinan (confidence)**.
+Jika model kurang yakin, hasil default akan dianggap valid sebagai tindakan keamanan.
+""")
+
+input_text = st.text_area("📋 Teks Berita", height=200)
 
 if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
@@ -90,14 +87,21 @@ if st.button("🔍 Deteksi"):
 
             input_ids = tokens['input_ids'].to(device)
             attention_mask = tokens['attention_mask'].to(device)
-
             st.write("📏 Jumlah token:", input_ids.shape[1])
 
             with torch.no_grad():
                 output = model(input_ids, attention_mask)
-                pred = torch.argmax(output, dim=1).item()
+                probs = torch.softmax(output, dim=1)
+                pred = torch.argmax(probs, dim=1).item()
+                confidence = probs[0][pred].item()
 
-            st.success("✅ Berita Valid" if pred == 0 else "❌ Berita Hoax")
+                # LOGIKA FIX UAS
+                if confidence < 0.6:
+                    label = "✅ Berita Valid (Confidence rendah)"
+                    st.warning(f"{label} – Confidence: {confidence:.2f}")
+                else:
+                    label = "✅ Berita Valid" if pred == 0 else "❌ Berita Hoax"
+                    st.success(f"{label} – Confidence: {confidence:.2f}")
 
         except Exception as e:
             st.error(f"❌ Terjadi error:\n`{str(e)}`")
