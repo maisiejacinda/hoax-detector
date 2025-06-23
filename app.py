@@ -109,7 +109,7 @@ if st.button("🔍 Deteksi"):
                 elif valid_triggered and pred == 1:
                     st.warning("⚠️ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata resmi.")
                     st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
-                elif confidence < 0.55:
+                elif confidence < 0.65:
                     st.warning("⚠️ Model tidak yakin penuh. Hasil mendekati netral.")
                 elif pred == 1 and confidence >= 0.70:
                     st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
