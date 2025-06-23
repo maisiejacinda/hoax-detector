@@ -1,4 +1,6 @@
 streamlit
 torch
 transformers
+nltk
 gdown
+pandas
