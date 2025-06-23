@@ -72,7 +72,6 @@ if st.button("\U0001F50D Deteksi"):
         st.warning("Masukkan isi berita, bukan URL.")
     else:
         try:
-            # Unduh model jika belum ada
             download_model_from_drive("1p4wrI6A3i0GLKhACAYUDSu61LtFQB_kJ", "model_hoax.pt")
             model, tokenizer = load_model_and_tokenizer()
             device = torch.device("cpu")
@@ -83,9 +82,11 @@ if st.button("\U0001F50D Deteksi"):
             if len(cleaned.split()) <= 12:
                 st.warning("\u26A0\uFE0F Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
 
-            # Keyword check
             trusted_sources = ["cnn indonesia", "kompas", "detik", "tempo", "antaranews"]
-            override_valid_keywords = ["masker", "protokol", "pemerintah", "kesehatan", "vaksinasi", "kementerian", "resmi"]
+            override_valid_keywords = [
+                "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi", "kementerian", "resmi",
+                "gratis", "booster", "program pemerintah", "pengumuman", "diumumkan", "seluruh wilayah"
+            ]
             override_hoax_keywords = [
                 "logam berat", "chip", "mikrochip", "mengontrol pikiran", "tanpa efek samping",
                 "konspirasi", "sumber tak dikenal", "melacak lokasi", "booster untuk chip",
@@ -101,13 +102,18 @@ if st.button("\U0001F50D Deteksi"):
                 hasil_list.append(["Teks lengkap", cleaned, "Valid (sumber terpercaya)", 1.0])
                 st.stop()
 
+            if hoax_triggered and valid_triggered:
+                st.warning("\u2696\uFE0F Ditemukan klaim mencurigakan, namun juga kata-kata resmi pemerintah.")
+                st.info("\U0001F7E1 Hasil tidak pasti – periksa informasi lebih lanjut.")
+                hasil_list.append(["Teks lengkap", cleaned, "Tidak Pasti (Campuran keyword)", 0.5])
+                st.stop()
+
             if hoax_triggered:
                 st.warning("\u26A0\uFE0F Klaim yang sering dikaitkan dengan hoaks terdeteksi.")
                 st.error("\u274C Berita terindikasi Hoax – berdasarkan kata kunci mencurigakan")
                 hasil_list.append(["Teks lengkap", cleaned, "Hoax (keyword)", 1.0])
                 st.stop()
 
-            # === Jika teks panjang, split dan deteksi per kalimat ===
             if len(cleaned.split()) > 50:
                 st.subheader("\U0001F4CC Deteksi per Kalimat:")
                 sentences = sent_tokenize(input_text)
@@ -133,7 +139,6 @@ if st.button("\U0001F50D Deteksi"):
 
                     hasil_list.append([f"Kalimat {i+1}", cleaned_sent, label, confidence])
 
-            # === Jika teks pendek atau normal, langsung deteksi
             else:
                 tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
                 input_ids = tokens['input_ids'].to(device)
@@ -147,6 +152,8 @@ if st.button("\U0001F50D Deteksi"):
                     confidence_hoax = probs[0][1].item()
 
                 label = "Valid" if pred == 0 else "Hoax"
+                if pred == 1 and confidence_hoax < 0.60:
+                    st.warning("\u26A0\uFE0F Confidence rendah, model tidak yakin penuh.")
                 st.metric(label="\U0001F4CC Hasil Prediksi", value=f"{label}", delta=f"{probs[0][pred].item():.2%}")
                 st.write(f"\U0001F4CA Confidence Valid: {confidence_valid:.2f}")
                 st.write(f"\U0001F4CA Confidence Hoax: {confidence_hoax:.2f}")
@@ -157,7 +164,6 @@ if st.button("\U0001F50D Deteksi"):
             st.error("\u274C Terjadi error saat deteksi.")
             st.code(traceback.format_exc())
 
-# === Export ke CSV ===
 if hasil_list:
     df = pd.DataFrame(hasil_list, columns=["Bagian", "Teks", "Label", "Confidence"])
     st.subheader("\U0001F4C1 Hasil Deteksi")
