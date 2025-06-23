@@ -6,11 +6,6 @@ import re
 import os
 import gdown
 import traceback
-import pandas as pd
-import nltk
-from nltk.tokenize import sent_tokenize
-
-nltk.download('punkt')
 
 # === Download model dari Google Drive ===
 def download_model_from_drive(file_id, destination):
@@ -29,8 +24,8 @@ def clean_text(text):
 
 # === Arsitektur model CNN + LSTM ===
 class IndoBERT_CNN_LSTM(nn.Module):
-    def __init__(self, bert_model):
-        super().__init__()
+    def _init_(self, bert_model):
+        super()._init_()
         self.bert = bert_model
         self.conv1 = nn.Conv1d(768, 128, kernel_size=3, padding=1)
         self.lstm = nn.LSTM(128, 64, batch_first=True)
@@ -47,22 +42,12 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-@st.cache_resource
-def load_model_and_tokenizer():
-    bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
-    tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
-    model = IndoBERT_CNN_LSTM(bert_model)
-    model.load_state_dict(torch.load("model_hoax.pt", map_location=torch.device("cpu")))
-    model.eval()
-    return model, tokenizer
-
-# === UI Setup ===
+# === Tampilan UI ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 st.markdown("Masukkan isi teks atau judul berita di bawah ini:")
 
 input_text = st.text_area("📋 Teks atau Judul Berita", height=200)
-hasil_list = []
 
 if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
@@ -71,81 +56,75 @@ if st.button("🔍 Deteksi"):
         st.warning("Masukkan isi berita, bukan URL.")
     else:
         try:
-            download_model_from_drive("1p4wrI6A3i0GLKhACAYUDSu61LtFQB_kJ", "model_hoax.pt")
-            model, tokenizer = load_model_and_tokenizer()
             device = torch.device("cpu")
 
+            # === Download & Load Model ===
+            download_model_from_drive("1p4wrI6A3i0GLKhACAYUDSu61LtFQB_kJ", "model_hoax.pt")
+            bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1').to(device)
+            model = IndoBERT_CNN_LSTM(bert_model)
+            model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
+            model = model.to(device)
+            model.eval()
+            tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+
+            # === Pembersihan dan deteksi awal ===
             cleaned = clean_text(input_text)
             st.write("🧽 Teks setelah dibersihkan:", cleaned)
 
+            # === Override Judul pendek
             if len(cleaned.split()) <= 12:
-                st.warning("⚠️ Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
+                st.warning("⚠ Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
 
+            # === Override sumber terpercaya
             trusted_sources = ["cnn indonesia", "kompas", "detik", "tempo", "antaranews"]
-            override_valid_keywords = [
-                "presiden", "jokowi", "kementerian", "resmi", "pemerintah", "bmkg", "gratis", "pengumuman",
-                "kompas", "cnn indonesia", "detik", "tempo", "sumber resmi", "puskesmas", "booster",
-                "rakyat", "wilayah", "diluncurkan", "peresmian", "meresmikan"
-            ]
-            override_hoax_keywords = [
-                "logam berat", "chip", "mikrochip", "mengontrol pikiran", "tanpa efek samping",
-                "konspirasi", "sumber tak dikenal", "melacak lokasi", "booster untuk chip",
-                "dilacak", "satelit", "bawang putih", "sembuh dalam semalam", "air es", "vaksin menyebabkan",
-                "bill gates", "dikendalikan", "matahari lebih ampuh", "air kelapa menyembuhkan"
-            ]
-
             if any(source in cleaned for source in trusted_sources):
                 st.info("📣 Ditemukan nama sumber terpercaya. Menganggap berita ini valid.")
                 st.success("✅ Berita Valid – berdasarkan sumber terpercaya")
-                hasil_list.append(["Teks lengkap", cleaned, "Valid (sumber terpercaya)", 1.0])
                 st.stop()
 
-            if any(word in cleaned for word in override_valid_keywords):
-                st.success("✅ Berita Valid – berdasarkan kata kunci resmi")
-                hasil_list.append(["Teks lengkap", cleaned, "Valid (keyword resmi)", 1.0])
-                st.stop()
-
-            if any(word in cleaned for word in override_hoax_keywords):
-                st.warning("⚠️ Klaim yang sering dikaitkan dengan hoaks terdeteksi.")
-                st.error("❌ Berita terindikasi Hoax – berdasarkan kata kunci mencurigakan")
-                hasil_list.append(["Teks lengkap", cleaned, "Hoax (keyword)", 1.0])
-                st.stop()
-
+            # === Tokenisasi dan prediksi
             tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
             input_ids = tokens['input_ids'].to(device)
             attention_mask = tokens['attention_mask'].to(device)
+            st.write("📏 Jumlah token:", input_ids.shape[1])
 
             with torch.no_grad():
                 output = model(input_ids, attention_mask)
                 probs = torch.softmax(output, dim=1)
                 pred = torch.argmax(probs, dim=1).item()
+                confidence = probs[0][pred].item()
                 confidence_valid = probs[0][0].item()
                 confidence_hoax = probs[0][1].item()
-                confidence = probs[0][pred].item()
 
-            gap = abs(confidence_valid - confidence_hoax)
-            label = "Valid" if pred == 0 else "Hoax"
-
-            if gap < 0.07:
-                st.warning("⚖️ Model tidak yakin – hasil mendekati netral.")
-                label = "Tidak Pasti"
-            elif confidence < 0.6:
-                st.warning("⚠️ Confidence rendah, model tidak yakin penuh.")
-
-            st.metric(label="📌 Hasil Prediksi", value=f"{label}", delta=f"{confidence:.2%}")
             st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
             st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
 
-            hasil_list.append(["Teks lengkap", cleaned, label, confidence])
+            # === Keyword logic
+            override_valid_keywords = [
+                "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi", "kementerian", "resmi"
+            ]
+            override_hoax_keywords = [
+                "logam berat", "chip", "mikrochip", "mengontrol pikiran",
+                "tanpa efek samping", "konspirasi", "sumber tak dikenal",
+                "melacak lokasi", "booster untuk chip", "dilacak", "satelit"
+            ]
+            valid_triggered = any(word in cleaned for word in override_valid_keywords)
+            hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
+
+            # === Final Decision Logic ===
+            if hoax_triggered and confidence < 0.85:
+                st.warning("⚠ Model mendeteksi berita mencurigakan dengan klaim berbahaya.")
+                st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
+            elif valid_triggered and pred == 1:
+                st.warning("⚠ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata resmi.")
+                st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
+            elif confidence < 0.55:
+                st.warning("⚠ Model tidak yakin penuh. Hasil mendekati netral.")
+            elif pred == 1 and confidence >= 0.70:
+                st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
+            else:
+                st.success(f"✅ Berita Valid – Confidence: {confidence:.2f}")
 
         except Exception as e:
             st.error("❌ Terjadi error saat deteksi.")
             st.code(traceback.format_exc())
-
-if hasil_list:
-    df = pd.DataFrame(hasil_list, columns=["Bagian", "Teks", "Label", "Confidence"])
-    st.subheader("📁 Hasil Deteksi")
-    st.dataframe(df)
-
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("⬇️ Download Hasil sebagai CSV", csv, "hasil_deteksi_hoaks.csv", "text/csv")
