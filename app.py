@@ -7,13 +7,13 @@ import os
 import gdown
 import traceback
 
-# === Fungsi Download Model dari Google Drive ===
+# === Download model dari Google Drive ===
 def download_model_from_drive(file_id, destination):
     if os.path.exists(destination):
         return
     gdown.download(f"https://drive.google.com/uc?id={file_id}", destination, quiet=False)
 
-# === Pembersih Teks ===
+# === Bersihkan teks ===
 def clean_text(text):
     text = text.lower()
     text = re.sub(r"http\S+|www.\S+", '', text)
@@ -22,7 +22,7 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Arsitektur Model CNN + LSTM ===
+# === Arsitektur model CNN + LSTM ===
 class IndoBERT_CNN_LSTM(nn.Module):
     def __init__(self, bert_model):
         super().__init__()
@@ -42,12 +42,12 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === UI Streamlit ===
+# === Tampilan UI ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
-st.markdown("Masukkan isi teks berita di bawah ini:")
+st.markdown("Masukkan isi teks atau judul berita di bawah ini:")
 
-input_text = st.text_area("📋 Teks Berita", height=200)
+input_text = st.text_area("📋 Teks atau Judul Berita", height=200)
 
 if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
@@ -57,21 +57,32 @@ if st.button("🔍 Deteksi"):
     else:
         try:
             device = torch.device("cpu")
+
+            # === Download & Load Model ===
             download_model_from_drive("1p4wrI6A3i0GLKhACAYUDSu61LtFQB_kJ", "model_hoax.pt")
-
-            bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
-            bert_model = bert_model.to(device)
-
+            bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1').to(device)
             model = IndoBERT_CNN_LSTM(bert_model)
             model.load_state_dict(torch.load("model_hoax.pt", map_location=device))
             model = model.to(device)
             model.eval()
-
             tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
 
+            # === Pembersihan dan deteksi awal ===
             cleaned = clean_text(input_text)
             st.write("🧽 Teks setelah dibersihkan:", cleaned)
 
+            # === Override Judul pendek
+            if len(cleaned.split()) <= 12:
+                st.warning("⚠️ Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
+
+            # === Override sumber terpercaya
+            trusted_sources = ["cnn indonesia", "kompas", "detik", "tempo", "antaranews"]
+            if any(source in cleaned for source in trusted_sources):
+                st.info("📣 Ditemukan nama sumber terpercaya. Menganggap berita ini valid.")
+                st.success("✅ Berita Valid – berdasarkan sumber terpercaya")
+                st.stop()
+
+            # === Tokenisasi dan prediksi
             tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
             input_ids = tokens['input_ids'].to(device)
             attention_mask = tokens['attention_mask'].to(device)
@@ -85,37 +96,34 @@ if st.button("🔍 Deteksi"):
                 confidence_valid = probs[0][0].item()
                 confidence_hoax = probs[0][1].item()
 
-                st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
-                st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
+            st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
+            st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
 
-                # === Override valid (berita resmi)
-                override_valid_keywords = [
-                    "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi"
-                ]
-                valid_triggered = any(word in cleaned for word in override_valid_keywords)
+            # === Keyword logic
+            override_valid_keywords = [
+                "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi", "kementerian", "resmi"
+            ]
+            override_hoax_keywords = [
+                "logam berat", "chip", "mikrochip", "mengontrol pikiran",
+                "tanpa efek samping", "konspirasi", "sumber tak dikenal",
+                "melacak lokasi", "booster untuk chip", "dilacak", "satelit"
+            ]
+            valid_triggered = any(word in cleaned for word in override_valid_keywords)
+            hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
 
-                # === Override hoax (berita berbahaya)
-                override_hoax_keywords = [
-                    "logam berat", "chip", "mikrochip", "mengontrol pikiran",
-                    "tanpa efek samping", "konspirasi", "sumber tak dikenal",
-                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit",
-                    "ajaib", "menyembuhkan semua", "obat mujarab", "menyembuhkan penyakit"
-                ]
-                hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
-
-                # === Final decision logic ===
-                if hoax_triggered:
-                    st.warning("⚠️ Model mendeteksi berita mencurigakan dengan klaim berbahaya.")
-                    st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
-                elif valid_triggered and pred == 1:
-                    st.warning("⚠️ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata resmi.")
-                    st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
-                elif confidence < 0.65:
-                    st.warning("⚠️ Model tidak yakin penuh. Hasil mendekati netral.")
-                elif pred == 1 and confidence >= 0.70:
-                    st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
-                else:
-                    st.success(f"✅ Berita Valid – Confidence: {confidence:.2f}")
+            # === Final Decision Logic ===
+            if hoax_triggered and confidence < 0.85:
+                st.warning("⚠️ Model mendeteksi berita mencurigakan dengan klaim berbahaya.")
+                st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
+            elif valid_triggered and pred == 1:
+                st.warning("⚠️ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata resmi.")
+                st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
+            elif confidence < 0.55:
+                st.warning("⚠️ Model tidak yakin penuh. Hasil mendekati netral.")
+            elif pred == 1 and confidence >= 0.70:
+                st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
+            else:
+                st.success(f"✅ Berita Valid – Confidence: {confidence:.2f}")
 
         except Exception as e:
             st.error("❌ Terjadi error saat deteksi.")
