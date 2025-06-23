@@ -22,7 +22,7 @@ def clean_text(text):
     text = re.sub(r"\s+", ' ', text).strip()
     return text
 
-# === Arsitektur Model CNN + LSTM + IndoBERT ===
+# === Arsitektur Model CNN + LSTM + IndoBERT (FIXED: pakai mean pooling) ===
 class IndoBERT_CNN_LSTM(nn.Module):
     def __init__(self, bert_model):
         super().__init__()
@@ -37,8 +37,9 @@ class IndoBERT_CNN_LSTM(nn.Module):
         x = x.permute(0, 2, 1)                           # [batch_size, hidden_size, seq_len]
         x = self.conv1(x)                                # [batch_size, 128, seq_len]
         x = x.permute(0, 2, 1)                           # [batch_size, seq_len, 128]
-        _, (h_n, _) = self.lstm(x)                       # h_n: [1, batch_size, 64]
-        logits = self.fc(h_n.squeeze(0))                 # [batch_size, 2]
+        lstm_out, _ = self.lstm(x)                       # [batch_size, seq_len, hidden]
+        x = torch.mean(lstm_out, dim=1)                  # ✅ mean pooling
+        logits = self.fc(x)                              # [batch_size, 2]
         return logits
 
 # === Streamlit UI ===
@@ -60,7 +61,7 @@ if st.button("🔍 Deteksi"):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # === Download Model (.pt) dari Google Drive ===
-            MODEL_ID = "1PKeq5RktCLpDnueDzQgr-khNYqTeTpmR"  # Ganti dengan ID file-mu
+            MODEL_ID = "1EVzxht_G2gB6imqqpJH-89e-lm5j9Smn"  # ✅ ID dari link Drive kamu
             MODEL_PATH = "model_hoax.pt"
             download_model_from_drive(MODEL_ID, MODEL_PATH)
 
@@ -96,9 +97,13 @@ if st.button("🔍 Deteksi"):
                 pred = torch.argmax(probs, dim=1).item()
                 confidence = probs[0][pred].item()
 
+            # === Output Hasil Deteksi ===
             st.subheader("📊 Hasil Deteksi:")
             st.write("Probabilitas:")
             st.json({ "Valid": round(probs[0][0].item(), 4), "Hoax": round(probs[0][1].item(), 4) })
+
+            if confidence < 0.6:
+                st.warning("⚠️ Model kurang yakin dengan prediksi ini. Hati-hati dalam mengambil keputusan.")
 
             if pred == 1 and confidence >= 0.6:
                 st.error(f"❌ Prediksi: HOAX – Confidence: {confidence:.2f}")
