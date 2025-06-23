@@ -88,9 +88,15 @@ if st.button("🔍 Deteksi"):
                 st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
                 st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
 
-                # Logika akhir yang lebih aman
-                if confidence < 0.55:
-                    st.warning("⚠️ Model tidak yakin – hasil mendekati netral.")
+                # === Override logika berdasar kata kunci umum
+                override_keywords = ["masker", "protokol", "pemerintah", "kesehatan", "vaksinasi"]
+                triggered = any(keyword in cleaned for keyword in override_keywords)
+
+                if triggered and pred == 1:
+                    st.warning("⚠️ Deteksi otomatis mengatakan 'Hoax', namun teks ini mengandung unsur kesehatan/protokol.\nHasil ini kemungkinan salah (false positive).")
+                    st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
+                elif confidence < 0.55:
+                    st.warning("⚠️ Model tidak yakin penuh. Hasil mendekati netral.")
                 elif pred == 1 and confidence >= 0.70:
                     st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
                 else:
