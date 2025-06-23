@@ -98,7 +98,7 @@ if st.button("🔍 Deteksi"):
                 override_hoax_keywords = [
                     "logam berat", "chip", "mikrochip", "mengontrol pikiran",
                     "tanpa efek samping", "konspirasi", "sumber tak dikenal",
-                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit"
+                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit",  "ajaib", "menyembuhkan semua", "obat mujarab"
                 ]
                 hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
 
