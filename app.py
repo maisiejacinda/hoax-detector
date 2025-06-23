@@ -88,20 +88,26 @@ if st.button("🔍 Deteksi"):
                 st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
                 st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
 
-                # === Override valid (berita protokol atau vaksin resmi)
-                override_valid_keywords = ["masker", "protokol", "pemerintah", "kesehatan", "vaksinasi"]
+                # === Override valid (berita resmi)
+                override_valid_keywords = [
+                    "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi"
+                ]
                 valid_triggered = any(word in cleaned for word in override_valid_keywords)
 
-                # === Override hoax (berita palsu berbahaya)
-                override_hoax_keywords = ["logam berat", "chip", "mikrochip", "mengontrol pikiran", "tanpa efek samping", "konspirasi", "sumber tak dikenal"]
+                # === Override hoax (berita berbahaya)
+                override_hoax_keywords = [
+                    "logam berat", "chip", "mikrochip", "mengontrol pikiran",
+                    "tanpa efek samping", "konspirasi", "sumber tak dikenal",
+                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit"
+                ]
                 hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
 
                 # === Final logic
-                if hoax_triggered and confidence < 0.7:
-                    st.warning("⚠️ Model ragu, tapi teks ini mengandung klaim berbahaya.")
-                    st.error(f"❌ Berita terindikasi Hoax – Confidence rendah: {confidence:.2f}")
+                if hoax_triggered and confidence < 0.85:
+                    st.warning("⚠️ Model mendeteksi berita mencurigakan dengan klaim berbahaya.")
+                    st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
                 elif valid_triggered and pred == 1:
-                    st.warning("⚠️ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata kesehatan atau resmi.")
+                    st.warning("⚠️ Deteksi otomatis menyebut 'Hoax', namun mengandung kata-kata resmi.")
                     st.info(f"Prediksi awal: ❌ Hoax – Confidence: {confidence:.2f}")
                 elif confidence < 0.55:
                     st.warning("⚠️ Model tidak yakin penuh. Hasil mendekati netral.")
