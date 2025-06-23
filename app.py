@@ -47,7 +47,6 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === Cache model & tokenizer ===
 @st.cache_resource
 def load_model_and_tokenizer():
     bert_model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
@@ -59,13 +58,13 @@ def load_model_and_tokenizer():
 
 # === UI Setup ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
-st.title("\U0001F4F0 Aplikasi Deteksi Berita Hoax Indonesia")
+st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 st.markdown("Masukkan isi teks atau judul berita di bawah ini:")
 
-input_text = st.text_area("\U0001F4CB Teks atau Judul Berita", height=200)
+input_text = st.text_area("📋 Teks atau Judul Berita", height=200)
 hasil_list = []
 
-if st.button("\U0001F50D Deteksi"):
+if st.button("🔍 Deteksi"):
     if input_text.strip() == "":
         st.warning("Teks tidak boleh kosong!")
     elif "http" in input_text:
@@ -77,97 +76,76 @@ if st.button("\U0001F50D Deteksi"):
             device = torch.device("cpu")
 
             cleaned = clean_text(input_text)
-            st.write("\U0001F9FD Teks setelah dibersihkan:", cleaned)
+            st.write("🧽 Teks setelah dibersihkan:", cleaned)
 
             if len(cleaned.split()) <= 12:
-                st.warning("\u26A0\uFE0F Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
+                st.warning("⚠️ Ini sepertinya hanya judul atau teks terlalu pendek, hasil mungkin kurang akurat.")
 
             trusted_sources = ["cnn indonesia", "kompas", "detik", "tempo", "antaranews"]
             override_valid_keywords = [
-                "masker", "protokol", "pemerintah", "kesehatan", "vaksinasi", "kementerian", "resmi",
-                "gratis", "booster", "program pemerintah", "pengumuman", "diumumkan", "seluruh wilayah"
+                "presiden", "jokowi", "kementerian", "resmi", "pemerintah", "bmkg", "gratis", "pengumuman",
+                "kompas", "cnn indonesia", "detik", "tempo", "sumber resmi", "puskesmas", "booster",
+                "rakyat", "wilayah", "diluncurkan", "peresmian", "meresmikan"
             ]
             override_hoax_keywords = [
                 "logam berat", "chip", "mikrochip", "mengontrol pikiran", "tanpa efek samping",
                 "konspirasi", "sumber tak dikenal", "melacak lokasi", "booster untuk chip",
-                "dilacak", "satelit", "bawang putih", "sembuh dalam semalam", "air es",
-                "vaksin menyebabkan", "matahari", "air kelapa", "bill gates"
+                "dilacak", "satelit", "bawang putih", "sembuh dalam semalam", "air es", "vaksin menyebabkan",
+                "bill gates", "dikendalikan", "matahari lebih ampuh", "air kelapa menyembuhkan"
             ]
-            valid_triggered = any(word in cleaned for word in override_valid_keywords)
-            hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
 
             if any(source in cleaned for source in trusted_sources):
-                st.info("\U0001F4E3 Ditemukan nama sumber terpercaya. Menganggap berita ini valid.")
-                st.success("\u2705 Berita Valid – berdasarkan sumber terpercaya")
+                st.info("📣 Ditemukan nama sumber terpercaya. Menganggap berita ini valid.")
+                st.success("✅ Berita Valid – berdasarkan sumber terpercaya")
                 hasil_list.append(["Teks lengkap", cleaned, "Valid (sumber terpercaya)", 1.0])
                 st.stop()
 
-            if hoax_triggered and valid_triggered:
-                st.warning("\u2696\uFE0F Ditemukan klaim mencurigakan, namun juga kata-kata resmi pemerintah.")
-                st.info("\U0001F7E1 Hasil tidak pasti – periksa informasi lebih lanjut.")
-                hasil_list.append(["Teks lengkap", cleaned, "Tidak Pasti (Campuran keyword)", 0.5])
+            if any(word in cleaned for word in override_valid_keywords):
+                st.success("✅ Berita Valid – berdasarkan kata kunci resmi")
+                hasil_list.append(["Teks lengkap", cleaned, "Valid (keyword resmi)", 1.0])
                 st.stop()
 
-            if hoax_triggered:
-                st.warning("\u26A0\uFE0F Klaim yang sering dikaitkan dengan hoaks terdeteksi.")
-                st.error("\u274C Berita terindikasi Hoax – berdasarkan kata kunci mencurigakan")
+            if any(word in cleaned for word in override_hoax_keywords):
+                st.warning("⚠️ Klaim yang sering dikaitkan dengan hoaks terdeteksi.")
+                st.error("❌ Berita terindikasi Hoax – berdasarkan kata kunci mencurigakan")
                 hasil_list.append(["Teks lengkap", cleaned, "Hoax (keyword)", 1.0])
                 st.stop()
 
-            if len(cleaned.split()) > 50:
-                st.subheader("\U0001F4CC Deteksi per Kalimat:")
-                sentences = sent_tokenize(input_text)
-                for i, sentence in enumerate(sentences):
-                    cleaned_sent = clean_text(sentence)
-                    tokens = tokenizer(cleaned_sent, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
-                    input_ids = tokens['input_ids'].to(device)
-                    attention_mask = tokens['attention_mask'].to(device)
+            tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
+            input_ids = tokens['input_ids'].to(device)
+            attention_mask = tokens['attention_mask'].to(device)
 
-                    with torch.no_grad():
-                        output = model(input_ids, attention_mask)
-                        probs = torch.softmax(output, dim=1)
-                        pred = torch.argmax(probs, dim=1).item()
-                        confidence = probs[0][pred].item()
+            with torch.no_grad():
+                output = model(input_ids, attention_mask)
+                probs = torch.softmax(output, dim=1)
+                pred = torch.argmax(probs, dim=1).item()
+                confidence_valid = probs[0][0].item()
+                confidence_hoax = probs[0][1].item()
+                confidence = probs[0][pred].item()
 
-                    label = "Valid" if pred == 0 else "Hoax"
-                    if pred == 1 and confidence >= 0.70:
-                        st.error(f"\u274C Kalimat {i+1} terindikasi Hoax – Confidence: {confidence:.2f}")
-                    elif confidence < 0.55:
-                        st.warning(f"\u26A0\uFE0F Kalimat {i+1} tidak yakin – Confidence: {confidence:.2f}")
-                    else:
-                        st.success(f"\u2705 Kalimat {i+1} Valid – Confidence: {confidence:.2f}")
+            gap = abs(confidence_valid - confidence_hoax)
+            label = "Valid" if pred == 0 else "Hoax"
 
-                    hasil_list.append([f"Kalimat {i+1}", cleaned_sent, label, confidence])
+            if gap < 0.07:
+                st.warning("⚖️ Model tidak yakin – hasil mendekati netral.")
+                label = "Tidak Pasti"
+            elif confidence < 0.6:
+                st.warning("⚠️ Confidence rendah, model tidak yakin penuh.")
 
-            else:
-                tokens = tokenizer(cleaned, return_tensors='pt', truncation=True, padding='max_length', max_length=512)
-                input_ids = tokens['input_ids'].to(device)
-                attention_mask = tokens['attention_mask'].to(device)
+            st.metric(label="📌 Hasil Prediksi", value=f"{label}", delta=f"{confidence:.2%}")
+            st.write(f"📊 Confidence Valid: {confidence_valid:.2f}")
+            st.write(f"📊 Confidence Hoax: {confidence_hoax:.2f}")
 
-                with torch.no_grad():
-                    output = model(input_ids, attention_mask)
-                    probs = torch.softmax(output, dim=1)
-                    pred = torch.argmax(probs, dim=1).item()
-                    confidence_valid = probs[0][0].item()
-                    confidence_hoax = probs[0][1].item()
-
-                label = "Valid" if pred == 0 else "Hoax"
-                if pred == 1 and confidence_hoax < 0.60:
-                    st.warning("\u26A0\uFE0F Confidence rendah, model tidak yakin penuh.")
-                st.metric(label="\U0001F4CC Hasil Prediksi", value=f"{label}", delta=f"{probs[0][pred].item():.2%}")
-                st.write(f"\U0001F4CA Confidence Valid: {confidence_valid:.2f}")
-                st.write(f"\U0001F4CA Confidence Hoax: {confidence_hoax:.2f}")
-
-                hasil_list.append(["Teks lengkap", cleaned, label, probs[0][pred].item()])
+            hasil_list.append(["Teks lengkap", cleaned, label, confidence])
 
         except Exception as e:
-            st.error("\u274C Terjadi error saat deteksi.")
+            st.error("❌ Terjadi error saat deteksi.")
             st.code(traceback.format_exc())
 
 if hasil_list:
     df = pd.DataFrame(hasil_list, columns=["Bagian", "Teks", "Label", "Confidence"])
-    st.subheader("\U0001F4C1 Hasil Deteksi")
+    st.subheader("📁 Hasil Deteksi")
     st.dataframe(df)
 
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("\u2B07\uFE0F Download Hasil sebagai CSV", csv, "hasil_deteksi_hoaks.csv", "text/csv")
+    st.download_button("⬇️ Download Hasil sebagai CSV", csv, "hasil_deteksi_hoaks.csv", "text/csv")
