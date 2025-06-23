@@ -42,7 +42,7 @@ class IndoBERT_CNN_LSTM(nn.Module):
         logits = self.fc(h_n.squeeze(0))
         return logits
 
-# === Tampilan UI Streamlit ===
+# === UI Streamlit ===
 st.set_page_config(page_title="Deteksi Berita Hoax", layout="wide")
 st.title("📰 Aplikasi Deteksi Berita Hoax Indonesia")
 st.markdown("Masukkan isi teks berita di bawah ini:")
@@ -98,12 +98,13 @@ if st.button("🔍 Deteksi"):
                 override_hoax_keywords = [
                     "logam berat", "chip", "mikrochip", "mengontrol pikiran",
                     "tanpa efek samping", "konspirasi", "sumber tak dikenal",
-                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit",  "ajaib", "menyembuhkan semua", "obat mujarab"
+                    "melacak lokasi", "booster untuk chip", "dilacak", "satelit",
+                    "ajaib", "menyembuhkan semua", "obat mujarab", "menyembuhkan penyakit"
                 ]
                 hoax_triggered = any(word in cleaned for word in override_hoax_keywords)
 
-                # === Final logic
-                if hoax_triggered and confidence < 0.85:
+                # === Final decision logic ===
+                if hoax_triggered:
                     st.warning("⚠️ Model mendeteksi berita mencurigakan dengan klaim berbahaya.")
                     st.error(f"❌ Berita terindikasi Hoax – Confidence: {confidence:.2f}")
                 elif valid_triggered and pred == 1:
