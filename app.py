@@ -65,4 +65,4 @@ st.markdown("Masukkan isi teks berita untuk dideteksi apakah valid atau hoax.")
 
 input_text = st.text_area("📋 Masukkan Teks Berita", height=200)
 
-if st.button("🔍 Deteks
+if st.button("🔍 Deteksi"):
